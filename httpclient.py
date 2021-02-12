@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-# Copyright 2016 Abram Hindle, https://github.com/tywtyw2002, and https://github.com/treedust
+# Copyright 2021 Abram Hindle, https://github.com/tywtyw2002, https://github.com/treedust, and Hugh Bagan
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import re
 # you may use urllib to encode data appropriately
 import urllib.parse
 from http import HTTPStatus
-import json # see __main__
+import json
 
 
 def help():
@@ -37,7 +37,8 @@ class HTTPResponse(object):
         self.code = code
         self.body = body
     
-    def get_codes(): # classmethod?
+    def get_codes() -> list: # classmethod?
+        """ Returns all possible HTTP status codes. """
         codes = []
         for status in list(HTTPStatus):
             codes.append(status.value)
@@ -47,11 +48,9 @@ class HTTPResponse(object):
 class HTTPClient(object):
 
     def parse_url(self, url):
-        print(url)
         # RichieHindle, BartoszKP https://stackoverflow.com/a/1059596
         url_parts = re.findall(r"[\w\.]+", url)
         colons = re.findall(r"[:]+", url)
-        print(url_parts, colons)
         has_scheme, has_port = 0, 0
         if 'http' in url_parts[0]: # scheme specified in url
             has_scheme = 1
@@ -62,7 +61,7 @@ class HTTPClient(object):
             port = int(url_parts[has_scheme+has_port])
         else:
             port = 80 # Assuming!
-        # Assume everything after is the path...
+        # Assume everything afterward is the path...
         path = '/'
         for i in range(has_scheme+has_port+1, len(url_parts), 1):
             path += url_parts[i]
@@ -73,8 +72,7 @@ class HTTPClient(object):
 
     def connect(self, host, port):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # get host info first
-        remote_ip = socket.gethostbyname(host)
+        remote_ip = socket.gethostbyname(host) # get host info first
         self.socket.connect((remote_ip, port))
         return remote_ip
     
@@ -89,16 +87,16 @@ class HTTPClient(object):
         return code
 
     def get_headers(self,data):
-        return None
+        return data.split('\r\n\r\n')[0]
 
     def get_body(self, data):
         return data.split('\r\n\r\n')[1] # NOTE could error?
     
     def sendall(self, data):
-        #print("REQUEST:\n", data)
+        # Is urllib.parse really needed?
         self.socket.sendall(data.encode('utf-8'))
         
-    def close(self): # Needless abstraction...
+    def close(self):
         self.socket.close() 
 
     # read everything from the socket
@@ -113,48 +111,43 @@ class HTTPClient(object):
                 done = not part
         return buffer.decode('utf-8')
 
-    def GET(self, url, args=None): # TODO: what are the args for?
-        """ Does not follow 3XX redirects! """
+    def GET(self, url, args=None):
+        """ Does not follow 3XX redirects! Ignores args. """
         host, port, path = self.parse_url(url)
-        print("host:", host, "port:", port, "path:", path)
-        payload = f'GET {path} HTTP/1.1\r\n'\
+        #print("host:", host, "port:", port, "path:", path)
+        request = f'GET {path} HTTP/1.1\r\n'\
                 + f'Host: {host}\r\n'\
                 + f'User-Agent: customhttpclient\r\n'\
                 + f'Connection: close\r\n'\
                 + f'\r\n' # Maybe need Accept header?
         remote_ip = self.connect(host, port)
-        print(f'Socket connected to {host} on IP {remote_ip}')
-        self.sendall(payload)
-        print(f'Payload sent.')
+        print(f'Socket connected to {host}:{port} on IP {remote_ip}')
+        self.sendall(request)
+        print(f'Request sent:\n{request}')
         self.socket.shutdown(socket.SHUT_WR)
         received = self.recvall(self.socket)
         print('Received response:')
+        print(self.get_headers(received))
         code = self.get_code(received)
-        print('CODE:', code)
         body = self.get_body(received)
-        print("BODY:", "\n", body)
+        print(f'\n{body}')
         self.close()
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        host, port, path = self.parse_url(url)
-        print(args)
-        
+        """ Assumes args are content body. """
+        host, port, path = self.parse_url(url)        
         # Dump all of the args into the POST content
         content = f''
         if args:
             items = list(args.items())
-            print(items)
             for i in range(len(items)):
                 item = items[i]
-                print(item)
                 content += f'{item[0]}' + f'=' + f'{item[1]}'
                 if i < len(items)-1:
                     content += f'&'
-            print(f'{content}')
-            #content = f'FullName=Hugh&Food=spaget'
         content_length = len(content) #sys.getsizeof(bytes(content,'utf-8'))
-        payload = f'POST {path} HTTP/1.1\r\n'\
+        request = f'POST {path} HTTP/1.1\r\n'\
                 + f'Host: {host}\r\n'\
                 + f'User-Agent: customhttpclient\r\n'\
                 + f'Content-Type: application/x-www-form-urlencoded\r\n'\
@@ -163,17 +156,17 @@ class HTTPClient(object):
                 + f'\r\n'\
                 + content
         remote_ip = self.connect(host, port)
-        print(f'Socket connected to {host} on IP {remote_ip}')
-        self.sendall(payload)
-        print(f'Payload sent.')
+        print(f'Socket connected to {host}:{port} on IP {remote_ip}')
+        self.sendall(request)
+        # Request content may not display correctly when print()'d
+        print(f'Request sent:\n{request}')
         self.socket.shutdown(socket.SHUT_WR)
         received = self.recvall(self.socket)
         print('Received response:')
-        #print(received)
+        print(self.get_headers(received))
         code = self.get_code(received)
-        print('CODE:', code)
         body = self.get_body(received)
-        print("BODY:", "\n", body)
+        print(f'\n{body}')
         self.close()
         return HTTPResponse(code, body)
 
@@ -195,6 +188,7 @@ if __name__ == "__main__":
         Arguments for POST will be expected as a JSON, and loaded to dict
         Example usage:
         python3 httpclient.py POST https://webdocs.cs.ualberta.ca/~hindle1/1.py '{"a":"aaaaaaaaaaaaa","b":"bbbbbbbbbbbbbbbbbbbbbb","c":"c","d":"012345\r67890\n2321321\n\r"}'
+        chander https://stackoverflow.com/a/18006814
         """
         print(sys.argv)
         print(client.command( sys.argv[2], sys.argv[1], json.loads(sys.argv[3])))

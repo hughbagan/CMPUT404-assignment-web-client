@@ -25,27 +25,27 @@
      a HTTPResponse object
 
 ** Requirements
-   - [ ] Implement basic HTTP GET
-   - [ ] Implement basic HTTP POST
-   - [ ] The httpclient can pass all the tests in freetests.py
+   - [X] Implement basic HTTP GET
+   - [X] Implement basic HTTP POST
+   - [X] The httpclient can pass all the tests in freetests.py
    - [ ] The webserver can pass all the tests in not-free-tests.py
      (you don't have this one! it can change -- but it will be fair to the user stories/requirements)
-   - [ ] HTTP POST can post vars
-   - [ ] HTTP POST handles at least Content-Type:
+   - [X] HTTP POST can post vars
+   - [X] HTTP POST handles at least Content-Type:
      application/x-www-form-urlencoded
-   - [ ] httpclient can handle 404 requests and 200 requests
+   - [X] httpclient can handle 404 requests and 200 requests
 
 ** Restrictions
-   - [ ] Use Python 3.6 (3.6.7 is preferred)
+   - [X] Use Python 3.6 (3.6.7 is preferred)
    - [ ] Must run in the VM without virtualenv (Ubuntu 18.10, Python 3.6)
-   - [ ] License your httpclient properly (use an OSI approved license)
+   - [X] License your httpclient properly (use an OSI approved license)
      - Put your name on it!
-   - [ ] You cannot use a Web Client library except for urllib utils
+   - [X] You cannot use a Web Client library except for urllib utils
      to convert strings to url-encode and query-string format and back
       - urllib.request is BANNED
       - urllib.parse is OKAY for parsing URLs
       - you have to parse headers yourself
-   - [ ] You should use the socket library that comes with python
+   - [X] You should use the socket library that comes with python
 
 ** Recommendations
    - Use the httpclient.py skeleton.
