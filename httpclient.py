@@ -24,6 +24,7 @@ import re
 # you may use urllib to encode data appropriately
 import urllib.parse
 from http import HTTPStatus
+import json # see __main__
 
 
 def help():
@@ -46,8 +47,8 @@ class HTTPResponse(object):
 class HTTPClient(object):
 
     def parse_url(self, url):
-        # TODO link S.O.
         print(url)
+        # RichieHindle, BartoszKP https://stackoverflow.com/a/1059596
         url_parts = re.findall(r"[\w\.]+", url)
         colons = re.findall(r"[:]+", url)
         print(url_parts, colons)
@@ -78,19 +79,26 @@ class HTTPClient(object):
         return remote_ip
     
     def get_code(self, data):
-        return None
+        # Should probably use regex here, but I'm lazy.
+        headers = data.split('\n')
+        code = 500
+        for c in HTTPResponse.get_codes():
+            if str(c) in headers[0]:
+                code = c
+                break
+        return code
 
     def get_headers(self,data):
         return None
 
     def get_body(self, data):
-        return None
+        return data.split('\r\n\r\n')[1] # NOTE could error?
     
     def sendall(self, data):
-        print("REQUEST:\n", data)
+        #print("REQUEST:\n", data)
         self.socket.sendall(data.encode('utf-8'))
         
-    def close(self): # Needless abstraction.
+    def close(self): # Needless abstraction...
         self.socket.close() 
 
     # read everything from the socket
@@ -105,15 +113,14 @@ class HTTPClient(object):
                 done = not part
         return buffer.decode('utf-8')
 
-    def GET(self, url, args=None):
-        """Does not follow 3XX redirects!"""
+    def GET(self, url, args=None): # TODO: what are the args for?
+        """ Does not follow 3XX redirects! """
         host, port, path = self.parse_url(url)
         print("host:", host, "port:", port, "path:", path)
-        
-        # TODO: can args be used to specify the GET ?
         payload = f'GET {path} HTTP/1.1\r\n'\
                 + f'Host: {host}\r\n'\
                 + f'User-Agent: customhttpclient\r\n'\
+                + f'Connection: close\r\n'\
                 + f'\r\n' # Maybe need Accept header?
         remote_ip = self.connect(host, port)
         print(f'Socket connected to {host} on IP {remote_ip}')
@@ -122,26 +129,52 @@ class HTTPClient(object):
         self.socket.shutdown(socket.SHUT_WR)
         received = self.recvall(self.socket)
         print('Received response:')
-        print(received)
-        # Interpret the received response.
-        # Should probably use regex here, but I'm lazy.
-        headers = received.split('\n')
-        print(headers)
-        code = 500
-        for c in HTTPResponse.get_codes():
-            if str(c) in headers[0]:
-                code = c
-                break
+        code = self.get_code(received)
         print('CODE:', code)
-        # Extract the response body
-        body = received.split('\r\n\r\n')[1] # NOTE could error?
+        body = self.get_body(received)
         print("BODY:", "\n", body)
         self.close()
         return HTTPResponse(code, body)
 
     def POST(self, url, args=None):
-        code = 500
-        body = ""
+        host, port, path = self.parse_url(url)
+        print(args)
+        
+        # Dump all of the args into the POST content
+        content = f''
+        if args:
+            items = list(args.items())
+            print(items)
+            for i in range(len(items)):
+                item = items[i]
+                print(item)
+                content += f'{item[0]}' + f'=' + f'{item[1]}'
+                if i < len(items)-1:
+                    content += f'&'
+            print(f'{content}')
+            #content = f'FullName=Hugh&Food=spaget'
+        content_length = len(content) #sys.getsizeof(bytes(content,'utf-8'))
+        payload = f'POST {path} HTTP/1.1\r\n'\
+                + f'Host: {host}\r\n'\
+                + f'User-Agent: customhttpclient\r\n'\
+                + f'Content-Type: application/x-www-form-urlencoded\r\n'\
+                + f'Content-Length: {content_length}\r\n'\
+                + f'Connection: close\r\n'\
+                + f'\r\n'\
+                + content
+        remote_ip = self.connect(host, port)
+        print(f'Socket connected to {host} on IP {remote_ip}')
+        self.sendall(payload)
+        print(f'Payload sent.')
+        self.socket.shutdown(socket.SHUT_WR)
+        received = self.recvall(self.socket)
+        print('Received response:')
+        #print(received)
+        code = self.get_code(received)
+        print('CODE:', code)
+        body = self.get_body(received)
+        print("BODY:", "\n", body)
+        self.close()
         return HTTPResponse(code, body)
 
     def command(self, url, command="GET", args=None):
@@ -157,6 +190,14 @@ if __name__ == "__main__":
     if (len(sys.argv) <= 1):
         help()
         sys.exit(1)
+    elif (len(sys.argv) > 3):
+        """
+        Arguments for POST will be expected as a JSON, and loaded to dict
+        Example usage:
+        python3 httpclient.py POST https://webdocs.cs.ualberta.ca/~hindle1/1.py '{"a":"aaaaaaaaaaaaa","b":"bbbbbbbbbbbbbbbbbbbbbb","c":"c","d":"012345\r67890\n2321321\n\r"}'
+        """
+        print(sys.argv)
+        print(client.command( sys.argv[2], sys.argv[1], json.loads(sys.argv[3])))
     elif (len(sys.argv) == 3):
         print(client.command( sys.argv[2], sys.argv[1] ))
     else:
